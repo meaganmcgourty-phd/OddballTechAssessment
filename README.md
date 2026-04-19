@@ -7,7 +7,7 @@ This project  processes contact center interaction data for a national organizat
 four tables, and produces a summary report of interactions grouped by month, contact center, and department.
 
 ## Repository Structure
-<img width="1211" height="1192" alt="image" src="https://github.com/user-attachments/assets/a6652037-95a8-4c01-bf4f-f71e4750391d" />
+<img width="796" height="1062" alt="image" src="https://github.com/user-attachments/assets/809a0ea1-4816-4f9e-a9a9-1a5c6f031c76" />
 
 ## Dependencies 
 This project requires R (version 4.0 or higher, latest update recommended) and RStudio installed locally on your machine.
