@@ -6,6 +6,9 @@ To the reviewers, thank you for taking the time to read and recreate my work! I 
 This project  processes contact center interaction data for a national organization. It ingests a January 2025 initial extract and February and March 2025 delta files, applies all changes chronologically across
 four tables, and produces a summary report of interactions grouped by month, contact center, and department.
 
+## Repository Structure
+<img width="1211" height="1192" alt="image" src="https://github.com/user-attachments/assets/a6652037-95a8-4c01-bf4f-f71e4750391d" />
+
 ## Dependencies 
 This project requires R (version 4.0 or higher, latest update recommended) and RStudio installed locally on your machine.
 It is highly recommended to set your working directory now to wherever you deem fit to store your data. Please ensure that the directory you choose allows you to write csv. and pdf. outputs.
