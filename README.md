@@ -89,7 +89,11 @@ Once knitting is complete, the following files will be generated in the output/ 
 
 ## Q1: What were the total number of interactions handled by each contact center in Q1 2025?
 See corresponding table. 
-### Answer: Boston MA NE
+### Answer:
+- Boston MA NE - 13 total interactions
+- Atlanta GA SE - 8 total interactions
+- Richmond VA E - 7 total interactions
+
 Justification: Summing total_interactions from support_report.csv across all months and departments, grouped by contract_center_name, gives the Q1 totals in the respective table.
 Boston MA NE handled the highest volume at 13 interactions across the quarter.
 
