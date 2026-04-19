@@ -1,0 +1,246 @@
+---
+title: "OddBall - Customer Support Report (Take Home Assessment)"
+author: "Meagan McGourty, Applicant"
+date: "`r Sys.Date()`"
+output:
+  github_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+---
+
+\newpage 
+
+```{r setup, include = TRUE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = FALSE, tidy = TRUE, tidy.opts = list(width.cutoff = 60))
+knitr::opts_knit$set(root.dir = "~/Technical Challenges/recruiting-challenges-main/recruiting-challenges-main/data-engineer/customer-support-report")
+
+library(dplyr)
+library(readr)
+library(lubridate)
+library(flextable)
+library(tidyr)
+```
+
+# Overview
+
+This pipeline will need to compile data from a January 2025 INITIAL extract and subsequent delta files for February and March 2025 (please note that March as the boundary month is considered inclusive and interactions through the end of March 2025 SHOULD NOT be excluded). The files will be processed chronologically to arrive at the final state of records, which will be aggregated into a summary report of contact center interactions.
+
+**Data Sources:**
+
+- **Fact Table:** `interactions.csv`
+- **Dimension Tables:** `agents.csv`, `contact_centers.csv`, `service_categories.csv`
+
+**Pipeline Steps:**
+
+1. Load the January initial files
+2. Apply the February delta files
+3. Apply the March delta files
+4. Save the final state of all tables
+5. Build and save the aggregated Support Report
+
+---
+
+# Setup
+
+```{r setup-dirs}
+setwd("~/Technical Challenges/recruiting-challenges-main/recruiting-challenges-main/data-engineer/customer-support-report")
+
+BASE_DIR <- "."
+INITIAL_DIR <- file.path(BASE_DIR, "data/initial")
+DELTA_DIR <- file.path(BASE_DIR, "data/delta")
+OUTPUT_DIR <- file.path(BASE_DIR, "output")
+
+dir.create(OUTPUT_DIR, showWarnings = FALSE)
+```
+
+---
+
+# Helper Functions
+
+## `apply_delta()`
+
+REMEMBER: The delta files share the EXACT SAME FORMAT as the initial files, but include an action item that indicates whether a record has changed. NULLs or blanks should not be there, as it appears all of the row instances have one of the following definition changes:
+
+Add -> Inserts a new record as a row instance.
+Update -> Replaces the existing record/instance (matched by a PRIMARY KEY).
+Delete -> Removes the record entirely (DOUBLE CHECK DELETIONS, THEY CANNOT BE UNDONE!) 
+
+```{r helper-apply-delta}
+apply_delta <- function(current_tbl, delta_tbl, id_col) {
+  
+  adds_updates <- delta_tbl %>%
+    filter(action %in% c("add", "update")) %>%
+    select(-action)
+  
+  deletes <- delta_tbl %>%
+    filter(action == "delete") %>%
+    pull(!!sym(id_col))
+  
+  # Remove rows being updated or deleted, then re-insert the fresh versions
+  result <- current_tbl %>%
+    filter(!(!!sym(id_col) %in% c(adds_updates[[id_col]], deletes)))
+  
+  bind_rows(result, adds_updates)
+}
+```
+
+## `read_delta_if_exists()`
+
+NOTE: Not every table has a delta file for every month! Example: `contact_centers` had no changes in February. 
+To prevent the pipeline from breaking, the following helper function will skip a table silently without issuing a warning.
+
+```{r helper-read-delta}
+read_delta_if_exists <- function(path) {
+  if (file.exists(path)) {
+    read_csv(path, show_col_types = FALSE)
+  } else {
+    message("No delta file found at: ", path, " — skipping.")
+    NULL
+  }
+}
+```
+
+---
+
+# Step 1: Load January Initial Files
+
+```{r load-initial}
+agents <- read_csv(file.path(INITIAL_DIR, "agents.csv"), show_col_types = FALSE)
+contact_centers <- read_csv(file.path(INITIAL_DIR, "contact_centers.csv"), show_col_types = FALSE)
+service_cats <- read_csv(file.path(INITIAL_DIR, "service_categories.csv"), show_col_types = FALSE)
+interactions <- read_csv(file.path(INITIAL_DIR, "interactions.csv"), show_col_types = FALSE)
+```
+
+```{r preview-initial, echo=FALSE}
+cat("agents:", nrow(agents), "rows\n")
+cat("contact_centers:", nrow(contact_centers), "rows\n")
+cat("service_cats:", nrow(service_cats), "rows\n")
+cat("interactions:", nrow(interactions), "rows\n")
+```
+
+---
+
+# Steps 2 & 3: Apply February and March Deltas
+
+Each delta file is applied in chronological order. For each month, the pipeline will process all four tables, while skipping any table that has no delta file for that month.
+
+```{r apply-deltas}
+delta_months <- c("202502", "202503")
+
+for (mo in delta_months) {
+  
+  agents_d <- read_delta_if_exists(file.path(DELTA_DIR, paste0("agents_delta_", mo, ".csv")))
+  centers_d <- read_delta_if_exists(file.path(DELTA_DIR, paste0("contact_centers_delta_", mo, ".csv")))
+  cats_d <- read_delta_if_exists(file.path(DELTA_DIR, paste0("service_categories_delta_", mo, ".csv")))
+  interact_d <- read_delta_if_exists(file.path(DELTA_DIR, paste0("interactions_delta_", mo, ".csv")))
+  
+  if (!is.null(agents_d)) agents <- apply_delta(agents, agents_d, "agent_id")
+  if (!is.null(centers_d)) contact_centers <- apply_delta(contact_centers, centers_d, "contact_center_id")
+  if (!is.null(cats_d)) service_cats <- apply_delta(service_cats, cats_d, "category_id")
+  if (!is.null(interact_d)) interactions <- apply_delta(interactions, interact_d, "interaction_id")
+  
+  cat("After", mo, "delta:\n")
+  cat("agents:", nrow(agents), "rows\n")
+  cat("contact_centers:", nrow(contact_centers), "rows\n")
+  cat("service_cats:", nrow(service_cats), "rows\n")
+  cat("interactions:", nrow(interactions), "rows\n\n")
+}
+```
+
+---
+
+# Step 4: Save Final State of All Tables
+
+The final state of each table is persisted as a CSV in the `/output` directory.
+
+```{r save-final}
+write_csv(agents, file.path(OUTPUT_DIR, "final_agents.csv"))
+write_csv(contact_centers, file.path(OUTPUT_DIR, "final_contact_centers.csv"))
+write_csv(service_cats, file.path(OUTPUT_DIR, "final_service_categories.csv"))
+write_csv(interactions, file.path(OUTPUT_DIR, "final_interactions.csv"))
+
+cat("Final tables saved to /output.\n")
+```
+
+**Final Agents:**
+```{r echo=FALSE}
+flextable(agents)
+```
+
+**Final Contact Centers:**
+```{r echo=FALSE}
+flextable(contact_centers)
+```
+
+**Final Service Categories:**
+```{r echo=FALSE}
+flextable(service_cats)
+```
+
+---
+
+# Step 5: Build the Support Report
+
+- **Timezone Conversion:** As noted on the instructions, all time stamps in the source data are UTC. Since the contact centers operate in Eastern Standard Time (EST), time stamps are converted to `America/New_York` before extracting the month. This will ensure interactions that occurred just after midnight UTC are attributed to the correct local date and month.
+- **Department:** The `department` field is not on the interactions table directly. It is derived by joining `service_categories` via `category_id`.
+- **Deleted Dimension Records:** If a contact center or service category was deleted in a delta file, interactions referencing it will produce `NA` after the join. These are replaced with `"Unknown"` per the challenge requirements, as it is unknown to us which department provided support to the caller.
+
+```{r build-report}
+report_base <- interactions %>%
+  
+  mutate(
+    timestamp_utc = ymd_hms(timestamp),
+    timestamp_est = with_tz(timestamp_utc, tzone = "America/New_York"),
+    month = format(timestamp_est, "%Y-%m")
+  ) %>%
+  
+  left_join(
+    contact_centers %>% select(contact_center_id, contact_center_name),
+    by = "contact_center_id"
+  ) %>%
+  
+  left_join(
+    service_cats %>% select(category_id, department),
+    by = "category_id"
+  ) %>%
+  
+  mutate(
+    contact_center_name = replace_na(contact_center_name, "Unknown"),
+    department = replace_na(department, "Unknown")
+  )
+
+support_report <- report_base %>%
+  group_by(month, contact_center_name, department) %>%
+  summarise(
+    total_interactions = n(),
+    total_calls = sum(channel == "phone", na.rm = TRUE),
+    total_call_duration = sum(call_duration_minutes, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(month, contact_center_name, department)
+
+write_csv(support_report, file.path(OUTPUT_DIR, "support_report.csv"))
+
+cat("support_report saved to /output/support_report.csv\n")
+```
+
+# Results
+
+```{r display-report, echo=FALSE}
+support_report %>%
+  rename(
+    "Month" = month,
+    "Contact Center" = contact_center_name,
+    "Department" = department,
+    "Total Interactions" = total_interactions,
+    "Total Calls" = total_calls,
+    "Total Call Duration (min)" = total_call_duration
+  ) %>%
+  flextable() %>%
+  align(j = 4:6, align = "right", part = "body") %>%
+  align(j = 4:6, align = "right", part = "header")
+```
