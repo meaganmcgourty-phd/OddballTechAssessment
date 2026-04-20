@@ -244,3 +244,68 @@ support_report %>%
   align(j = 4:6, align = "right", part = "body") %>%
   align(j = 4:6, align = "right", part = "header")
 ```
+# Answers to Business Questions
+
+## Q1: Total Interactions by Contact Center in Q1 2025
+```{r q1, echo=FALSE}
+support_report %>%
+  group_by(contact_center_name) %>%
+  summarise(
+    total_interactions = sum(total_interactions),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_interactions)) %>%
+  rename(
+    "Contact Center" = contact_center_name,
+    "Total Interactions (Q1 2025)" = total_interactions
+  ) %>%
+  flextable() %>%
+  autofit()
+```
+
+## Q2: Which Month Had the Highest Interaction Volume? 
+```{r q2, echo=FALSE}
+monthly <- support_report %>%
+  group_by(month) %>%
+  summarise(
+    total_interactions = sum(total_interactions),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_interactions))
+
+highest_month <- monthly %>% slice(1) %>% pull(month)
+
+monthly %>%
+  rename(
+    "Month" = month,
+    "Total Interactions" = total_interactions
+  ) %>%
+  flextable() %>%
+  autofit()
+```
+
+## Q3: Which Contact Center Had the Longest Average Call Duration?
+```{r q3, echo=FALSE}
+avg_duration <- support_report %>%
+  filter(total_calls > 0) %>%
+  group_by(contact_center_name) %>%
+  summarise(
+    total_calls = sum(total_calls),
+    total_call_duration = sum(total_call_duration),
+    avg_call_duration = round(total_call_duration / total_calls, 1),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(avg_call_duration))
+
+top_center <- avg_duration %>% slice(1) %>% pull(contact_center_name)
+
+avg_duration %>%
+  rename(
+    "Contact Center" = contact_center_name,
+    "Total Calls" = total_calls,
+    "Total Duration (min)" = total_call_duration,
+    "Avg Call Duration (min)" = avg_call_duration
+  ) %>%
+  flextable() %>%
+  autofit()
+```
